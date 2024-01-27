@@ -25,6 +25,8 @@ fi
     # ------------------------------------------------------------------------------
     echo "Installing oh-my-zsh..."
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended | yes
+
+    source ~/.zshrc
     # ------------------------------------------------------------------------------
     #install zsh-autosuggestions and auto completion plugins    
     # ------------------------------------------------------------------------------
