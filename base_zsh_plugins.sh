@@ -1,6 +1,26 @@
 echo "This script will install oh-my-zsh and several plugins. Continue? (y/n)"
 read answer
 if echo "$answer" | grep -iq "^y" ;then
+
+if ! which zsh > /dev/null; then
+    echo "zsh not found. Installing..."
+    if [ "$(uname)" == "Darwin" ]; then
+        # macOS-specific commands here
+        echo "Detected macOS. Installing zsh..."
+        brew install zsh
+    elif [ -f /etc/arch-release ]; then
+        # Arch Linux-specific commands here
+        echo "Detected Arch Linux. Installing zsh..."
+        sudo pacman -S zsh
+    elif [ -f /etc/debian_version ]; then
+        # Debian/Ubuntu-specific commands here
+        echo "Detected Debian/Ubuntu. Installing zsh..."
+        sudo apt install zsh
+    else
+        echo "Unsupported operating system. Please install zsh manually."
+        exit 1
+    fi
+fi
     # install oh-my-zsh plugins
     # ------------------------------------------------------------------------------
     echo "Installing oh-my-zsh..."
