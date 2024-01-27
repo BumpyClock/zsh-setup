@@ -1,19 +1,19 @@
 echo "This script will install oh-my-zsh and several plugins. Continue? (y/n)"
 read answer
-if echo "$answer" | grep -iq "^y" ;then
+if echo "$answer" | grep -iq "^y"; then
 
-if ! which zsh > /dev/null; then
-    echo "zsh not found. Please install zsh first."
-    exit 1
-fi
+    if ! which zsh >/dev/null; then
+        echo "zsh not found. Please install zsh first."
+        exit 1
+    fi
     # install oh-my-zsh plugins
     # ------------------------------------------------------------------------------
     echo "Installing oh-my-zsh..."
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
-    source ~/.zshrc
+    ZSH_CUSTOM=${ZSH_CUSTOM:-~/.oh-my-zsh/custom}
     # ------------------------------------------------------------------------------
-    #install zsh-autosuggestions and auto completion plugins    
+    #install zsh-autosuggestions and auto completion plugins
     # ------------------------------------------------------------------------------
     echo "Installing zsh-autosuggestions..."
     git clone https://github.com/zsh-users/zsh-autosuggestions.git $ZSH_CUSTOM/plugins/zsh-autosuggestions
