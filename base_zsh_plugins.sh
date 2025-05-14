@@ -1,167 +1,126 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ----------------------------------------
-# A robust installer for zsh, Oh My Zsh, popular plugins, Powerlevel10k,
-# FiraCode Nerd Font, and lsd with corrected compinit and syntax-highlighting setup
-# Supports macOS (Homebrew) and common Linux distros (apt, yum, dnf)
-# Defaults to non-interactive (repeatable), use -i for interactive mode
-# ----------------------------------------
+# -----------------------------------------------------------------------------
+# zsh-bootstrap.sh
+# -----------------------------------------------------------------------------
+# • Installs zsh (if missing), Oh‑My‑Zsh, Powerlevel10k, essential plugins,
+#   FiraCode Nerd Font, and lsd.
+# • Defaults to **non‑interactive**, fully repeatable. Use **-i** for a single
+#   confirmation prompt.
+# • Sets **zsh as the default login shell** automatically (or asks in -i mode).
+# -----------------------------------------------------------------------------
 
-# Colors for output
-GREEN="\033[0;32m"
-YELLOW="\033[1;33m"
-RED="\033[0;31m"
-NC="\033[0m" # No Color
+GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; NC="\033[0m"
 
-# Helper: prompt for yes/no
-confirm() {
-  read -r -p "$1 [y/N]: " response
-  case "$response" in
-    [yY][eE][sS]|[yY]) return 0;;
-    *) return 1;;
-  esac
-}
+confirm() { read -r -p "$1 [y/N]: " ans; [[ $ans =~ ^([yY][eE][sS]|[yY])$ ]]; }
+require() { command -v "$1" &>/dev/null || { echo -e "${RED}Error:${NC} $1 not found"; exit 1; }; }
+install_pkg() {
+  case $(uname) in
+    Darwin) brew install "$1" ;;
+    *)  if command -v apt-get &>/dev/null; then sudo apt-get update && sudo apt-get install -y "$1";
+        elif command -v dnf &>/dev/null;  then sudo dnf install -y "$1";
+        elif command -v yum &>/dev/null;  then sudo yum install -y "$1";
+        else echo -e "${YELLOW}Warn:${NC} manual install needed for $1"; fi ;;
+  esac }
 
-# Ensure a command exists
-require() {
-  if ! command -v "$1" &>/dev/null; then
-    echo -e "${RED}Error:${NC} '$1' is required but not installed." >&2
-    exit 1
-  fi
-}
-
-# OS detection
-ios_type="$(uname)"
-
-# Install package via available manager
-install_package() {
-  pkg="$1"
-  if [[ "$ios_type" == "Darwin" ]]; then
-    brew install "$pkg"
-  elif command -v apt-get &>/dev/null; then
-    sudo apt-get update && sudo apt-get install -y "$pkg"
-  elif command -v dnf &>/dev/null; then
-    sudo dnf install -y "$pkg"
-  elif command -v yum &>/dev/null; then
-    sudo yum install -y "$pkg"
-  else
-    echo -e "${YELLOW}Warning:${NC} Could not determine package manager for '$pkg'." >&2
-  fi
-}
-
-# Parse flags
+# -------------------------
+# flags
+# -------------------------
 INTERACTIVE=false
-while getopts "i" opt; do
-  case "$opt" in
-    i) INTERACTIVE=true ;; 
-    *) echo "Usage: $0 [-i]" >&2; exit 1 ;;
-  esac
+while getopts "i" o; do [[ $o == i ]] && INTERACTIVE=true; done
+$INTERACTIVE && { echo -e "${GREEN}Interactive mode${NC}"; confirm "Proceed with zsh bootstrap?" || exit 0; }
+
+# -------------------------
+# prerequisites
+# -------------------------
+require curl; require git; command -v zsh &>/dev/null || { echo "Installing zsh…"; install_pkg zsh; }
+
+ZSHRC="$HOME/.zshrc"; [[ -f $ZSHRC ]] && cp "$ZSHRC" "${ZSHRC}.bak.$(date +%s)"
+
+# -------------------------
+# Oh My Zsh
+# -------------------------
+if [[ ! -d ${ZSH:-$HOME/.oh-my-zsh} ]]; then
+  echo -e "${GREEN}Installing Oh My Zsh…${NC}"
+  RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+fi
+ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+
+# -------------------------
+# Plugins (minimal list for OMZ)
+# -------------------------
+OMZ_PLUGINS=(git zsh-autosuggestions zsh-autocomplete)
+for p in zsh-autosuggestions zsh-autocomplete zsh-syntax-highlighting fast-syntax-highlighting; do
+  dir="$ZSH_CUSTOM/plugins/$p"
+  [[ -d $dir ]] || git clone --depth 1 "https://github.com/${p/zsh-/zsh-}.git" "$dir" &>/dev/null || true
 done
 
-# Starting message
-if $INTERACTIVE; then
-  echo -e "${GREEN}Interactive mode enabled${NC}"
-  if ! confirm "This script will install Oh My Zsh, plugins, Powerlevel10k, FiraCode Nerd Font, and lsd. Continue?"; then
-    echo "Cancelled."; exit 0
-  fi
-else
-  echo -e "${GREEN}Running in non-interactive mode${NC}"
-fi
-
-# Ensure essential tools
-require zsh || install_package zsh
-require git
-require curl
-
-# Backup existing .zshrc
-ZSHRC="$HOME/.zshrc"
-if [[ -f "$ZSHRC" ]]; then
-  timestamp=$(date +"%Y%m%d%H%M%S")
-  cp "$ZSHRC" "$ZSHRC.backup.$timestamp"
-  echo -e "${GREEN}Backed up ~/.zshrc to ~/.zshrc.backup.$timestamp${NC}"
-fi
-
-# Install Oh My Zsh
-if [[ ! -d "${ZSH:-$HOME/.oh-my-zsh}" ]]; then
-  echo -e "${GREEN}Installing Oh My Zsh...${NC}"
-  RUNZSH=no KEEP_ZSHRC=yes \
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-else
-  echo -e "${GREEN}Oh My Zsh present; skipping.${NC}"
-fi
-
-# Custom folder
-eval "export ZSH_CUSTOM=${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
-
-# Plugin list
-plugins=(zsh-autosuggestions zsh-syntax-highlighting fast-syntax-highlighting zsh-autocomplete)
-
-# Clone plugins
-for plugin in "${plugins[@]}"; do
-  target="$ZSH_CUSTOM/plugins/$plugin"
-  repo=""
-  case "$plugin" in
-    zsh-autosuggestions)       repo=https://github.com/zsh-users/zsh-autosuggestions.git;;
-    zsh-syntax-highlighting)   repo=https://github.com/zsh-users/zsh-syntax-highlighting.git;;
-    fast-syntax-highlighting)   repo=https://github.com/zdharma-continuum/fast-syntax-highlighting.git;;
-    zsh-autocomplete)          repo=https://github.com/marlonrichert/zsh-autocomplete.git;;
-  esac
-  if [[ ! -d "$target" ]]; then
-    echo -e "${GREEN}Installing $plugin...${NC}"
-    git clone --depth 1 "$repo" "$target"
-  fi
-done
-
+# -------------------------
 # Powerlevel10k theme
-if [[ ! -d "$ZSH_CUSTOM/themes/powerlevel10k" ]]; then
-  echo -e "${GREEN}Installing Powerlevel10k...${NC}"
-  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k"
-fi
+# -------------------------
+[[ -d $ZSH_CUSTOM/themes/powerlevel10k ]] || git clone --depth 1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k" &>/dev/null
 
-# Update .zshrc: plugins and theme
-if grep -qE '^plugins=' "$ZSHRC"; then
-  sed -i.bak -E "s|^plugins=.*|plugins=(${plugins[*]})|" "$ZSHRC"
+# -------------------------
+# Write ~/.zshrc idempotently (plugin line and sentinel block)
+# -------------------------
+# 1. plugin list
+if grep -qE "^plugins=" "$ZSHRC"; then
+  sed -i.bak -E "s|^plugins=.*|plugins=(${OMZ_PLUGINS[*]})|" "$ZSHRC"
 else
-  echo "plugins=(${plugins[*]})" >> "$ZSHRC"
+  echo "plugins=(${OMZ_PLUGINS[*]})" >> "$ZSHRC"
 fi
+# 2. theme line
 if grep -q '^ZSH_THEME=' "$ZSHRC"; then
   sed -i.bak -E "s|^ZSH_THEME=.*|ZSH_THEME=\"powerlevel10k/powerlevel10k\"|" "$ZSHRC"
 else
   echo 'ZSH_THEME="powerlevel10k/powerlevel10k"' >> "$ZSHRC"
 fi
-
-# Completion & highlighting setup
-cat << 'EOF' >> "$ZSHRC"
-# Clean up old compdump
+# 3. managed block (remove old, then append)
+sed -i.bak '/# <<< ZSH-BOOTSTRAP/{:a;n;/# >>> ZSH-BOOTSTRAP/!ba;d}' "$ZSHRC" || true
+cat >> "$ZSHRC" << 'BLOCK'
+# <<< ZSH-BOOTSTRAP (managed by zsh-bootstrap.sh; do not edit) >>>
+# Clean stale completions then quiet‑init
 rm -f ~/.zcompdump*
+autoload -U compinit && compinit -u 2>/dev/null
 
-autoload -U compinit; compinit -u 2>/dev/null
+# External highlighters (load **after** all other plugins)
+source "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+source "$ZSH_CUSTOM/plugins/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh"
 
-# Syntax highlighting config
-ZSH_HIGHLIGHT_STANDALONE=false
-ZSH_HIGHLIGHT_HIGHLIGHTERS=(main)
-source "${ZSH_CUSTOM}/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-source "${ZSH_CUSTOM}/plugins/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh"
+# lsd modern ls aliases
+if command -v lsd &>/dev/null; then
+  alias ls='lsd --long --group-directories-first'
+  alias ll='lsd -la --group-directories-first'
+  alias la='lsd -a --group-directories-first'
+fi
+# >>> ZSH-BOOTSTRAP <<<
+BLOCK
 
-# lsd aliases
-alias ls='lsd --long --group-directories-first'
-alias ll='lsd -l --all --group-directories-first'
-alias la='lsd -la --group-directories-first'
-EOF
+# -------------------------
+# Fonts & tools
+# -------------------------
+case $(uname) in
+  Darwin) brew tap homebrew/cask-fonts && brew install --cask font-fira-code-nerd-font ;;
+  *)  if command -v apt-get &>/dev/null; then sudo apt-get update && sudo apt-get install -y fonts-firacode || true; fi || {
+        git clone --depth 1 https://github.com/ryanoasis/nerd-fonts.git /tmp/nerd-f && /tmp/nerd-f/install.sh --single FiraCode && rm -rf /tmp/nerd-f ; } ;;
+esac
 
-# Install FiraCode Nerd Font
-if [[ "$ios_type" == "Darwin" ]]; then
-  brew tap homebrew/cask-fonts && brew install --cask font-fira-code-nerd-font
-elif command -v apt-get &>/dev/null; then
-  sudo apt-get update && sudo apt-get install -y fonts-firacode
-else
-  git clone --depth 1 https://github.com/ryanoasis/nerd-fonts.git /tmp/nerd-fonts && /tmp/nerd-fonts/install.sh --single 'FiraCode' && rm -rf /tmp/nerd-fonts
+command -v lsd &>/dev/null || { echo "Installing lsd…"; install_pkg lsd || { require cargo; cargo install lsd; }; }
+
+# -------------------------
+# Make zsh the default shell (if not already)
+# -------------------------
+if [[ $SHELL != $(command -v zsh) ]]; then
+  if $INTERACTIVE; then
+    if confirm "Change default shell to zsh? (will prompt for password)"; then
+      chsh -s "$(command -v zsh)" && echo -e "${GREEN}Default shell set to zsh.${NC}"
+    else
+      echo -e "${YELLOW}Skipped changing default shell.${NC}"
+    fi
+  else
+    chsh -s "$(command -v zsh)" &>/dev/null || echo -e "${YELLOW}Could not change default shell automatically (requires password).${NC}"
+  fi
 fi
 
-# Install lsd
-if ! command -v lsd &>/dev/null; then
-  install_package lsd || { require cargo; cargo install lsd; }
-fi
-
-echo -e "${GREEN}Setup complete! Run 'exec zsh' or restart your terminal.${NC}"
+echo -e "${GREEN}Done!  ➜  Restart terminal or 'exec zsh'.${NC}"
