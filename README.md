@@ -23,3 +23,7 @@ This script is compatible with macOS and Linux.
 ## Note
 
 This script appends the newly installed plugins to the existing plugins line in your `.zshrc` file. It does not replace any existing plugins.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
